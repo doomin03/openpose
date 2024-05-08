@@ -4,8 +4,9 @@ import argparse
 
 import cv2
 import numpy as np
-from tqdm import tqdm
-from dotenv import load_dotenv
+import torch 
+# from tqdm import tqdm
+# from dotenv import load_dotenv
 
 from flask import Flask, render_template, request
 
@@ -68,7 +69,7 @@ def get_keypoints(frame, net, threshold):
     return keypoints_json
 
 
-def worker(input_path, output_path, model):
+def worker(input_path, output_path, model_path):
     '''input_path: 입력 파일 경로
        output_path: 출력 파일 경로
     '''
@@ -79,6 +80,13 @@ def worker(input_path, output_path, model):
         except Exception:
             return False
         return True
+    
+    model = None
+    
+    try:
+        model = torch.load(model_path)
+    except Exception:
+        return False
     
     try:
         image = cv2.imread(input_path)
@@ -96,8 +104,8 @@ def hello():
 @app.route("/post", methods=['POST'])
 def post():
     # 'input_path'와 'output_path' 필드를 추출, 기본값은 빈 문자열로 설정
-    input_path = request.form.get('input_path', ' ')  # 괄호 사용
-    output_path = request.form.get('output_path', ' ')  # 괄호 사용
+    input_path = request.form.get('input_path', ' ')
+    output_path = request.form.get('output_path', ' ') 
     model_path = request.form.get('model_path', ' ')
 
     worker(input_path, output_path, model_path)
