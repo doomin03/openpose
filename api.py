@@ -1,17 +1,18 @@
-import os
+from flask import Flask, request, jsonify
+from flask_restx import Api, Resource, fields
+from flask_cors import CORS
+
 import json
-import argparse
 
 import cv2
 import numpy as np
 import torch 
-# from tqdm import tqdm
-# from dotenv import load_dotenv
 
-from flask import Flask, render_template, request
+import boto3
 
 
-app = Flask(__name__, template_folder=r'C:\Users\HAMA\Desktop\openpose')  # 템플릿 폴더 경로 설정
+
+
 
 def get_keypoints(frame, net, threshold):
     '''
@@ -69,9 +70,10 @@ def get_keypoints(frame, net, threshold):
     return keypoints_json
 
 
-def worker(input_path, output_path, model_path):
-    '''input_path: 입력 파일 경로
-       output_path: 출력 파일 경로
+def worker(input_path, output_path, model):
+    '''
+        input_path: 입력 파일 경로
+        output_path: 출력 파일 경로
     '''
     def save_file(keypoints_dict, output_path):
         try:
@@ -83,10 +85,10 @@ def worker(input_path, output_path, model_path):
     
     model = None
     
-    try:
-        model = torch.load(model_path)
-    except Exception:
-        return False
+    # try:
+    #     model = torch.load(model_path)
+    # except Exception:
+    #     return False
     
     try:
         image = cv2.imread(input_path)
@@ -97,18 +99,57 @@ def worker(input_path, output_path, model_path):
     return True
 
 
-@app.route("/")
-def hello():
-    return render_template("index.html")  # 'index.html' 렌더링
+app = Flask(__name__)
+CORS(app)
+api = Api(app=app,version='1.0', title="openpose API")
 
-@app.route("/post", methods=['POST'])
-def post():
-    # 'input_path'와 'output_path' 필드를 추출, 기본값은 빈 문자열로 설정
-    input_path = request.form.get('input_path', ' ')
-    output_path = request.form.get('output_path', ' ') 
-    model_path = request.form.get('model_path', ' ')
+#호출 규칙
+input_model = api.model('Input',{
+    "input_path" : fields.String(required=True),
+    "output_path" : fields.String(required=True)   
+})
 
-    worker(input_path, output_path, model_path)
 
-if __name__ == "__main__":
-    app.run(debug=True, port=80)  # Flask 애플리케이션 실행
+
+class Openpose_(Resource):
+    @api.expect(input_model)
+    def post(self):
+        result = {
+            "code" : 0 ,
+            "message" : "요청/연결 오류",
+        }
+        try:
+            value = request.get_json()
+            
+            input_path = str(value.get("input_path"))
+            output_path = str(value.get("output_path"))
+            
+        except:
+            import traceback
+            e = traceback.format_exc()
+            result["code"] = 0
+            result["message"] = e
+            return jsonify(result)
+        
+        try:
+            worker(input_path=input_path, output_path=output_path)
+            
+            result["code"] = 1
+            result["message"] = "성공"
+        except:
+            import traceback
+            e = traceback.format_exc()
+            result["code"] = -1
+            result["message"] = e
+            return jsonify(result)
+        
+        
+        
+        return jsonify(result)
+#엔드포인트
+api.add_resource(Openpose_, '/path_input')
+
+if __name__ == '__main__':
+    app.run(port=8081)
+    
+    
